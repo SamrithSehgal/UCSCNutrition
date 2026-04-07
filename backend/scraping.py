@@ -1,6 +1,16 @@
 from bs4 import BeautifulSoup
 import requests
-urls = ["https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=40&locationName=John+R.+Lewis+%26+College+Nine+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate=04%2f06%2f2026&mealName=Breakfast"]
+from datetime import date
+
+today = date.today().strftime("%m%%2f%d%%2f%Y")
+
+urls = {
+    "John R. Lewis & College Nine": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=40&locationName=John+R.+Lewis+%26+College+Nine+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
+    "Cowell & Stevenson": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=05&locationName=Cowell+%26+Stevenson+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
+    "Crown & Merrill": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=20&locationName=Crown+%26+Merrill+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
+    "Porter & Kresge": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=25&locationName=Porter+%26+Kresge+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
+    "Rachel Carson & Oakes": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=30&locationName=Rachel+Carson+%26+Oakes+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
+}
 meals = ["Breakfast", "Lunch", "Dinner"]
 base = "https://nutrition.sa.ucsc.edu/"
 
@@ -25,6 +35,38 @@ headers = {
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
 }
 
+allFoodTree = {}
+
+def toNumber(s):
+    try:
+        digits = ''.join(c for c in s if c.isdigit() or c == '.')
+        if not digits:
+            return None
+        n = float(digits)
+        return int(n) if n == int(n) else n
+    except:
+        return None
+
+KEY_MAP = {
+    "Tot. Fat":       "Total Fat",
+    "Sat. Fat":       "Saturated Fat",
+    "Trans Fat":      "Trans Fat",
+    "Chol.":          "Cholesterol",
+    "Tot. Carb.":     "Total Carbohydrate",
+    "Dietary Fiber":  "Dietary Fiber",
+    "Diet. Fiber":    "Dietary Fiber",
+    "Tot. Sugars":    "Total Sugars",
+    "Sugars":         "Total Sugars",
+    "Added Sugars":   "Added Sugars",
+    "Protein":        "Protein",
+    "Sodium":         "Sodium",
+    "Vit. D":         "Vitamin D",
+    "Vitamin D":      "Vitamin D",
+    "Vitamin D - mcg": "Vitamin D",
+    "Calcium":        "Calcium",
+    "Iron":           "Iron",
+    "Potassium":      "Potassium",
+}
 
 def parseLabel(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -46,7 +88,7 @@ def parseLabel(html):
             if 'Serving Size' in text and i + 1 < len(size5):
                 nutrition['Serving Size'] = size5[i + 1].get_text(strip=True)
             elif 'Calories' in text:
-                nutrition['Calories'] = text.replace('Calories', '').strip()
+                nutrition['Calories'] = toNumber(text.replace('Calories', '').strip())
 
     # Nutrient rows live in the inner table (direct parent of the rowspan td)
     # Rows 1-5 have 4 tds each: (name+amount, %DV, name+amount, %DV)
@@ -70,12 +112,7 @@ def parseLabel(html):
                 val = fonts[1].get_text(strip=True)
                 if not key or not val:
                     continue
-                dv_fonts = dv_td.find_all('font')
-                dv_num = dv_fonts[0].get_text(strip=True).replace('\xa0', '').strip() if dv_fonts else ''
-                entry = {'amt': val}
-                if dv_num and dv_num != '':
-                    entry['%DV'] = dv_num + '%'
-                nutrition[key] = entry
+                nutrition[KEY_MAP.get(key, key)] = toNumber(val)
 
         # Vitamins are in row 6 inside a nested table
         if len(rows) > 6:
@@ -86,7 +123,7 @@ def parseLabel(html):
                     name = fonts[0].get_text(strip=True)
                     pct = fonts[1].get_text(strip=True).replace('\xa0', '').strip()
                     if name and '%' in pct:
-                        nutrition[name] = {'%DV': pct.strip()}
+                        nutrition[KEY_MAP.get(name, name)] = toNumber(pct.strip())
 
     # Ingredients
     ingredients = soup.find('span', class_='labelingredientsvalue')
@@ -102,32 +139,29 @@ def parseLabel(html):
 
 
 def getData():
-    labels = []
-    count = 0
-    for url in urls:
-        req = requests.get(url=url, headers=headers)
-        soup = BeautifulSoup(req.content, 'html.parser')
-        for link in soup.findAll('a'):
-            nutritionLink = link.get('href')
-            if nutritionLink:
-                if "label.aspx" in nutritionLink:
-                    labels.append(link.get('href'))
-                    if count > 5:
+    for place, baseUrl in urls.items():
+        allFoodTree[place] = {}
+        for meal in meals:
+            labels = []
+            req = requests.get(url=baseUrl + meal, headers=headers)
+            soup = BeautifulSoup(req.content, 'html.parser')
+            for div in soup.find_all('div', class_=['longmenucolmenucat', 'longmenucoldispname']):
+                if 'longmenucolmenucat' in div.get('class', []):
+                    if 'Cereal' in div.get_text():
                         break
-            count += 1
+                else:
+                    link = div.find('a')
+                    if link and link.get('href') and 'label.aspx' in link.get('href'):
+                        labels.append(link.get('href'))
+            print(len(labels))
 
-        print(len(labels))
-    
-    recipes = []
-    for label in labels:
-        nutritionReq = requests.get(base + label, headers=headers)
-        res = parseLabel(nutritionReq.content)
-        recipes.append(res)
+            recipes = []
+            for label in labels:
+                nutritionReq = requests.get(base + label, headers=headers)
+                res = parseLabel(nutritionReq.content)
+                recipes.append(res)
 
-    for recipe in recipes:
-        print(recipe)
-        print("\n\n")
-        
-    
+            allFoodTree[place][meal] = recipes
 
-getData()
+    return allFoodTree
+
