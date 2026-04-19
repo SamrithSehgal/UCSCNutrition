@@ -1,26 +1,46 @@
-# Node
-frontend/node_modules/
-node_modules/
-dist/
-build/
-
-# Python
+# ── Python ───────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
+*.egg-info/
 venv/
 .venv/
-*.egg-info/
+backend/nutrition/
 
-# OS
+# ── Environment variables ────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Node ─────────────────────────────────────────────
+node_modules/
+dist/
+build/
+
+# ── Expo / React Native ──────────────────────────────
+.expo/
+android/
+ios/
+*.jks
+*.keystore
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+
+# ── Firebase / Google secrets ────────────────────────
+GoogleService-Info.plist
+google-services.json
+
+# ── OS ───────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# IDE
+# ── IDE ──────────────────────────────────────────────
 .vscode/
 .idea/
 
-# Logs
+# ── Logs ─────────────────────────────────────────────
 *.log
+npm-debug.log*

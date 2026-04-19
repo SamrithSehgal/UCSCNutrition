@@ -4,12 +4,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from datetime import date
 from database import SessionLocal, engine, Base
-from db.models import DiningHall, Meal, MenuItem
+from db.models.models import DiningHall, Meal, MenuItem
+from sqlalchemy.exc import IntegrityError
 
 MEAL_ID_MAP = {
-    "Breakfast": 1,
-    "Lunch": 2,
-    "Dinner": 3,
+    # Dining halls
+    "Breakfast":  1,
+    "Lunch":      2,
+    "Dinner":     3,
+    "Late+Night": 5,
+    # Cafes & markets
+    "After+11am": 6,
+    "Menu":       7,
+    "All":        8,
+    "ALL":        8,
 }
 
 def seed(allFoodTree: dict):
@@ -59,7 +67,11 @@ def seed(allFoodTree: dict):
                         ingredients=item.get("Ingredients"),
                         allergens=item.get("Allergens"),
                     )
-                    db.add(menu_item)
+                    try:
+                        with db.begin_nested():
+                            db.add(menu_item)
+                    except IntegrityError:
+                        pass
 
         db.commit()
         print("Seeded successfully.")

@@ -4,14 +4,44 @@ from datetime import date
 
 today = date.today().strftime("%m%%2f%d%%2f%Y")
 
+B = f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum={{num}}&locationName={{name}}&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName="
+
 urls = {
-    "John R. Lewis & College Nine": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=40&locationName=John+R.+Lewis+%26+College+Nine+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
-    "Cowell & Stevenson": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=05&locationName=Cowell+%26+Stevenson+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
-    "Crown & Merrill": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=20&locationName=Crown+%26+Merrill+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
-    "Porter & Kresge": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=25&locationName=Porter+%26+Kresge+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
-    "Rachel Carson & Oakes": f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum=30&locationName=Rachel+Carson+%26+Oakes+Dining+Hall&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName=",
+    # Dining Halls
+    "John R. Lewis & College Nine": B.format(num=40, name="John+R.+Lewis+%26+College+Nine+Dining+Hall"),
+    "Cowell & Stevenson": B.format(num="05", name="Cowell+%26+Stevenson+Dining+Hall"),
+    "Crown & Merrill": B.format(num=20, name="Crown+%26+Merrill+Dining+Hall"),
+    "Porter & Kresge": B.format(num=25, name="Porter+%26+Kresge+Dining+Hall"),
+    "Rachel Carson & Oakes": B.format(num=30, name="Rachel+Carson+%26+Oakes+Dining+Hall"),
+    # Cafes & Markets
+    "Banana Joe's": B.format(num=21, name="Banana+Joe%27s"),
+    "Oakes Cafe": B.format(num=23, name="Oakes+Cafe"),
+    "Global Village Cafe": B.format(num=46, name="Global+Village+Cafe"),
+    "Owl's Nest Cafe": B.format(num=24, name="Owl%27s+Nest+Cafe"),
+    "UCen Coffee Bar": B.format(num=45, name="UCen+Coffee+Bar+%26+Bistro"),
+    "Stevenson Coffee House": B.format(num=26, name="Stevenson+Coffee+House"),
+    "Perk Coffee Bar": B.format(num=22, name="Perk+Coffee+Bar"),
+    "Porter Market": B.format(num=50, name="Porter+Market"),
+    "Merrill Market": B.format(num=47, name="Merrill+Market"),
 }
-meals = ["Breakfast", "Lunch", "Dinner"]
+
+location_meals = {
+    "John R. Lewis & College Nine": ["Breakfast", "Lunch", "Dinner", "Late+Night"],
+    "Cowell & Stevenson": ["Breakfast", "Lunch", "Dinner", "Late+Night"],
+    "Crown & Merrill": ["Breakfast", "Lunch", "Dinner"],
+    "Porter & Kresge": ["Breakfast", "Lunch", "Dinner"],
+    "Rachel Carson & Oakes": ["Breakfast", "Lunch", "Dinner", "Late+Night"],
+    "Banana Joe's": ["Late+Night"],
+    "Oakes Cafe": ["Breakfast", "After+11am"],
+    "Global Village Cafe": ["Menu"],
+    "Owl's Nest Cafe": ["Breakfast", "All"],
+    "UCen Coffee Bar": ["Menu"],
+    "Stevenson Coffee House": ["Menu"],
+    "Perk Coffee Bar": ["ALL"],
+    "Porter Market": ["Menu"],
+    "Merrill Market": ["Menu"],
+}
+
 base = "https://nutrition.sa.ucsc.edu/"
 
 headers = {
@@ -72,14 +102,10 @@ def parseLabel(html):
     soup = BeautifulSoup(html, 'html.parser')
     nutrition = {}
 
-    # Name
     name_div = soup.find('div', class_='labelrecipe')
     if name_div:
         nutrition['name'] = name_div.get_text(strip=True)
 
-    # Serving size and calories are in the rowspan=8 td
-    # "Serving Size" label and its value are two consecutive size=5 fonts
-    # "Calories 123" is a single size=5 bold font
     info_td = soup.find('td', attrs={'rowspan': '8'})
     if info_td:
         size5 = info_td.find_all('font', attrs={'size': '5'})
@@ -90,9 +116,6 @@ def parseLabel(html):
             elif 'Calories' in text:
                 nutrition['Calories'] = toNumber(text.replace('Calories', '').strip())
 
-    # Nutrient rows live in the inner table (direct parent of the rowspan td)
-    # Rows 1-5 have 4 tds each: (name+amount, %DV, name+amount, %DV)
-    # Row 6 has the vitamin colspan td
     if info_td:
         inner_table = info_td.find_parent('table')
         container = inner_table.find('tbody') or inner_table
@@ -114,7 +137,6 @@ def parseLabel(html):
                     continue
                 nutrition[KEY_MAP.get(key, key)] = toNumber(val)
 
-        # Vitamins are in row 6 inside a nested table
         if len(rows) > 6:
             vitamin_row = rows[6]
             for td in vitamin_row.select('table tr td'):
@@ -125,12 +147,10 @@ def parseLabel(html):
                     if name and '%' in pct:
                         nutrition[KEY_MAP.get(name, name)] = toNumber(pct.strip())
 
-    # Ingredients
     ingredients = soup.find('span', class_='labelingredientsvalue')
     if ingredients:
         nutrition['Ingredients'] = ingredients.get_text(strip=True)
 
-    # Allergens
     allergens = soup.find('span', class_='labelallergensvalue')
     if allergens:
         nutrition['Allergens'] = allergens.get_text(strip=True)
@@ -141,7 +161,7 @@ def parseLabel(html):
 def getData():
     for place, baseUrl in urls.items():
         allFoodTree[place] = {}
-        for meal in meals:
+        for meal in location_meals[place]:
             labels = []
             req = requests.get(url=baseUrl + meal, headers=headers)
             soup = BeautifulSoup(req.content, 'html.parser')

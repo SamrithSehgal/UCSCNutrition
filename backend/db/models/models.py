@@ -12,7 +12,7 @@ class DiningHall(Base):
 
 class Meal(Base):
     __tablename__ = "meals"
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     diningId = Column(Integer, ForeignKey("dining_halls.id"))
     mealId = Column(Integer) #1 = breakfast, 2 = lunch, 3 = dinner, 4 = late night
     date = Column(Date)
@@ -26,7 +26,7 @@ class MenuItem(Base):
     mealId = Column(Integer, ForeignKey("meals.id"))
     meal = relationship("Meal", back_populates="menu_items")
 
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, unique=True, index=True)
     serving_size = Column(String)
     calories = Column(Float)
 
