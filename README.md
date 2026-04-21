@@ -1,6 +1,6 @@
 # CampusPlates
 
-A full-stack nutrition tracking app built for UC Santa Cruz students. Browse real-time dining hall menus, log meals, and track macro/micronutrient intake against personalized goals — all from your phone.
+A full-stack nutrition tracking app built for UC Santa Cruz students. Browse real-time dining hall menus, log meals, and track macro/micronutrient intake against personalized goals.
 
 Built with **React Native (Expo)** on the frontend and **FastAPI + PostgreSQL** on the backend. Menu data is scraped daily from UCSC's official nutrition site across all 14 campus dining locations.
 
@@ -15,13 +15,10 @@ Browse menus for all 5 dining halls and 9 cafes/markets. Each item shows full nu
 Log what you eat across four meal slots (Breakfast, Lunch, Dinner, Snacks). Add items directly from the menu browser or search the full database. See a live calorie count with a progress ring against your daily goal, plus a macro breakdown (P/C/F).
 
 ### Personalized Goals
-During onboarding, the app collects your body metrics (sex, age, height, weight) and fitness goal (gain/lose/maintain). It then calculates 14 daily nutrition targets using the **Mifflin-St Jeor BMR equation**, AMDR macronutrient ranges, and DRI micronutrient standards — all server-side.
+During onboarding, the app collects your body metrics (sex, age, height, weight) and fitness goal (gain/lose/maintain). It then calculates 14 daily nutrition targets
 
 ### Analytics
 View your nutrition trends across four time windows: 1 Week, 1 Month, 6 Months, and 1 Year. The analytics page shows average daily calories, a bar chart (with smart bucketing — daily for short ranges, weekly/monthly for longer ones), macro cards with progress bars, and a full micro breakdown (sodium, sugar, sat fat, cholesterol, Vitamin D, calcium, iron, potassium).
-
-### Auth
-Google OAuth 2.0 restricted to `@ucsc.edu` accounts via Firebase Authentication.
 
 ---
 
@@ -98,21 +95,6 @@ journal_entries
 
 ---
 
-## Nutrition Goal Calculation
-
-The backend calculates personalized daily targets using established nutrition science:
-
-- **BMR**: Mifflin-St Jeor equation (sex, age, height, weight)
-- **TDEE**: BMR scaled by activity factor (sedentary → very active)
-- **Calorie goal**: TDEE adjusted for weight change rate (1 lb/week = 500 kcal/day)
-- **Protein**: 25% of calories, floored at 0.8 g/kg body weight (DRI minimum)
-- **Carbs**: Remaining calories after protein + fat, minimum 130 g/day
-- **Fat**: 30% of calories
-- **Fiber**: DRI by sex and age (21-38 g/day)
-- **Micros**: FDA Daily Value targets for Vitamin D, Calcium, Iron, Potassium
-
----
-
 ## Project Structure
 
 ```
@@ -166,47 +148,6 @@ frontend/
 | `POST` | `/api/getJournalByDate` | Get all logged items for a day |
 | `POST` | `/api/getJournalTotals` | Get daily macro/micro sums |
 | `POST` | `/api/getJournalRange` | Get aggregated stats for a date range |
-
----
-
-## Running Locally
-
-### Backend
-
-```bash
-cd backend
-python -m venv nutrition && source nutrition/bin/activate
-pip install -r requirements.txt
-# Set DATABASE_URL in .env (PostgreSQL connection string)
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npx expo start
-```
-
-Requires Firebase config files (`GoogleService-Info.plist` for iOS, `google-services.json` for Android) and a Google OAuth Web Client ID in `.env`.
-
----
-
-## Design
-
-Dark theme optimized for OLED. Custom animated drawer navigation with spring physics. No external UI libraries — all components are hand-built with React Native primitives.
-
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `bg` | `#111111` | Screen background |
-| `surface` | `#1D1D1D` | Cards, modals |
-| `raised` | `#262626` | Elevated surfaces |
-| `border` | `#303030` | Dividers, outlines |
-| `text` | `#F2F2F2` | Primary text |
-| `blue` | `#5080BC` | Primary accent |
-| `green` | `#4A8F5A` | Success, positive |
-| `danger` | `#9E4040` | Warnings, over-limit |
 
 ---
 
