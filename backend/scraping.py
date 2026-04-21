@@ -2,28 +2,27 @@ from bs4 import BeautifulSoup
 import requests
 from datetime import date
 
-today = date.today().strftime("%m%%2f%d%%2f%Y")
-
-B = f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum={{num}}&locationName={{name}}&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName="
-
-urls = {
-    # Dining Halls
-    "John R. Lewis & College Nine": B.format(num=40, name="John+R.+Lewis+%26+College+Nine+Dining+Hall"),
-    "Cowell & Stevenson": B.format(num="05", name="Cowell+%26+Stevenson+Dining+Hall"),
-    "Crown & Merrill": B.format(num=20, name="Crown+%26+Merrill+Dining+Hall"),
-    "Porter & Kresge": B.format(num=25, name="Porter+%26+Kresge+Dining+Hall"),
-    "Rachel Carson & Oakes": B.format(num=30, name="Rachel+Carson+%26+Oakes+Dining+Hall"),
-    # Cafes & Markets
-    "Banana Joe's": B.format(num=21, name="Banana+Joe%27s"),
-    "Oakes Cafe": B.format(num=23, name="Oakes+Cafe"),
-    "Global Village Cafe": B.format(num=46, name="Global+Village+Cafe"),
-    "Owl's Nest Cafe": B.format(num=24, name="Owl%27s+Nest+Cafe"),
-    "UCen Coffee Bar": B.format(num=45, name="UCen+Coffee+Bar+%26+Bistro"),
-    "Stevenson Coffee House": B.format(num=26, name="Stevenson+Coffee+House"),
-    "Perk Coffee Bar": B.format(num=22, name="Perk+Coffee+Bar"),
-    "Porter Market": B.format(num=50, name="Porter+Market"),
-    "Merrill Market": B.format(num=47, name="Merrill+Market"),
-}
+def _make_urls():
+    today = date.today().strftime("%m%%2f%d%%2f%Y")
+    B = f"https://nutrition.sa.ucsc.edu/longmenu.aspx?sName=UC+Santa+Cruz+Dining&locationNum={{num}}&locationName={{name}}&naFlag=1&WeeksMenus=UCSC+-+This+Week%27s+Menus&dtdate={today}&mealName="
+    return {
+        # Dining Halls
+        "John R. Lewis & College Nine": B.format(num=40, name="John+R.+Lewis+%26+College+Nine+Dining+Hall"),
+        "Cowell & Stevenson": B.format(num="05", name="Cowell+%26+Stevenson+Dining+Hall"),
+        "Crown & Merrill": B.format(num=20, name="Crown+%26+Merrill+Dining+Hall"),
+        "Porter & Kresge": B.format(num=25, name="Porter+%26+Kresge+Dining+Hall"),
+        "Rachel Carson & Oakes": B.format(num=30, name="Rachel+Carson+%26+Oakes+Dining+Hall"),
+        # Cafes & Markets
+        "Banana Joe's": B.format(num=21, name="Banana+Joe%27s"),
+        "Oakes Cafe": B.format(num=23, name="Oakes+Cafe"),
+        "Global Village Cafe": B.format(num=46, name="Global+Village+Cafe"),
+        "Owl's Nest Cafe": B.format(num=24, name="Owl%27s+Nest+Cafe"),
+        "UCen Coffee Bar": B.format(num=45, name="UCen+Coffee+Bar+%26+Bistro"),
+        "Stevenson Coffee House": B.format(num=26, name="Stevenson+Coffee+House"),
+        "Perk Coffee Bar": B.format(num=22, name="Perk+Coffee+Bar"),
+        "Porter Market": B.format(num=50, name="Porter+Market"),
+        "Merrill Market": B.format(num=47, name="Merrill+Market"),
+    }
 
 location_meals = {
     "John R. Lewis & College Nine": ["Breakfast", "Lunch", "Dinner", "Late+Night"],
@@ -159,6 +158,7 @@ def parseLabel(html):
 
 
 def getData():
+    urls = _make_urls()
     for place, baseUrl in urls.items():
         allFoodTree[place] = {}
         for meal in location_meals[place]:

@@ -36,10 +36,10 @@ export default StyleSheet.create({
     paddingBottom: 12,
   },
   logo: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: "700",
     color: C.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   logoutBtn: {
     padding: 6,

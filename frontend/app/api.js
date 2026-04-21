@@ -1,4 +1,4 @@
-const BASE_URL = "http://100.64.179.161:8000/api";
+const BASE_URL = "http://100.64.185.122:8000/api";
 const TIMEOUT_MS = 8000;
 
 function fetchWithTimeout(url, options = {}) {

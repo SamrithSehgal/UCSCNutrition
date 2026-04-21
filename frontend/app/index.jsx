@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import {
   View,
   Text,
+  Image,
   Pressable,
   ImageBackground,
   ActivityIndicator,
@@ -42,13 +43,15 @@ export default function Home() {
       .then(result => {
         router.replace(result.is_new ? "/(app)/onboarding/activity" : "/(app)/dashboard");
       })
-      .catch(async () => {
-        // Backend unreachable — sign out of Firebase so the user isn't
-        // left in a half-authenticated state with no DB record.
+      .catch(async (e) => {
         await auth().signOut();
         setFbUser(null);
         setLoading(false);
-        setError("Could not reach the server. Make sure you're connected and try again.");
+        const isTimeout = e?.name === "AbortError";
+        setError(isTimeout
+          ? "Server timed out. Is the backend running and reachable?"
+          : `Server error: ${e?.message ?? "unknown"}. Check your connection.`
+        );
       });
   }, [fbUser]);
 
@@ -76,10 +79,11 @@ export default function Home() {
 
       <View style={s.container}>
         <View style={s.header}>
-          <Text style={s.logo}>CampusPlates</Text>
-        </View>
-
-        <View style={s.main}>
+          <Image
+            source={require("./(app)/assets/Logo.png")}
+            style={s.logo}
+            resizeMode="contain"
+          />
           <Text style={s.title}>{"Track every meal,\nfrom anywhere."}</Text>
           <Text style={s.sub}>Keep track of all your macronutrients</Text>
         </View>

@@ -3,13 +3,13 @@ from datetime import date
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, SessionLocal
-from db.models.models import DiningHall, Meal, MenuItem
+from db.models.models import DiningHall, Meal, MenuItem, MealMenuItem
 from db.models.userModels import User, JournalEntry
 from db.seed import seed
 from scraping import getData
 from database import get_db
 from db.dbFuncs import postUser as db_postUser, saveOnboarding as db_saveOnboarding
-from db.dbFuncs import getMealIds, getMenuItem, getMealsByDate as db_getMealsByDate, addToMeal as db_addToMeal, deleteFromJournal as db_deleteFromJournal, getJournalTotals as db_getJournalTotals, getJournalByDate as db_getJournalByDate, getUserGoals as db_getUserGoals, getDHMenu as db_getDHMenu
+from db.dbFuncs import getMealIds, getMenuItem, getMealsByDate as db_getMealsByDate, addToMeal as db_addToMeal, deleteFromJournal as db_deleteFromJournal, getJournalTotals as db_getJournalTotals, getJournalByDate as db_getJournalByDate, getUserGoals as db_getUserGoals, getDHMenu as db_getDHMenu, getJournalRange as db_getJournalRange
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi import Depends
@@ -44,17 +44,6 @@ async def lifespan(app: FastAPI):
             ]
             for sql in migrations:
                 db.execute(text(sql))
-            db.commit()
-        except Exception:
-            db.rollback()
-
-        # Trigram index for fast fuzzy name search
-        try:
-            db.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-            db.execute(text(
-                "CREATE INDEX IF NOT EXISTS menu_items_name_trgm "
-                "ON menu_items USING gin (name gin_trgm_ops)"
-            ))
             db.commit()
         except Exception:
             db.rollback()
@@ -123,12 +112,16 @@ def getJournalByDateRoute(data: dict):
     return db_getJournalByDate(data)
 
 @app.get('/api/getDHMenu')
-def getDHMenuRoute(dining_hall: str, date: str = None):
-    return db_getDHMenu({"dining_hall": dining_hall, "date": date})
+def getDHMenuRoute(date: str = None):
+    return db_getDHMenu({"date": date})
 
 @app.get('/api/getUserGoals')
 def getUserGoalsRoute(email: str):
     return db_getUserGoals(email)
+
+@app.post('/api/getJournalRange')
+def getJournalRangeRoute(data: dict):
+    return db_getJournalRange(data)
 
 if __name__ == "__main__":
     import uvicorn

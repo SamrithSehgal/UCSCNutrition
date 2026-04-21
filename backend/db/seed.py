@@ -4,16 +4,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from datetime import date
 from database import SessionLocal, engine, Base
-from db.models.models import DiningHall, Meal, MenuItem
+from db.models.models import DiningHall, Meal, MenuItem, MealMenuItem
 from sqlalchemy.exc import IntegrityError
 
 MEAL_ID_MAP = {
-    # Dining halls
     "Breakfast":  1,
     "Lunch":      2,
     "Dinner":     3,
     "Late+Night": 5,
-    # Cafes & markets
     "After+11am": 6,
     "Menu":       7,
     "All":        8,
@@ -27,7 +25,6 @@ def seed(allFoodTree: dict):
 
     try:
         for place_name, meals in allFoodTree.items():
-            # Get or create DiningHall
             dining_hall = db.query(DiningHall).filter_by(name=place_name).first()
             if not dining_hall:
                 dining_hall = DiningHall(name=place_name)
@@ -46,30 +43,38 @@ def seed(allFoodTree: dict):
                 db.flush()
 
                 for item in items:
-                    menu_item = MenuItem(
-                        mealId=meal.id,
-                        name=item.get("name", ""),
-                        serving_size=item.get("Serving Size"),
-                        calories=item.get("Calories"),
-                        total_fat=item.get("Total Fat"),
-                        saturated_fat=item.get("Saturated Fat"),
-                        trans_fat=item.get("Trans Fat"),
-                        cholesterol=item.get("Cholesterol"),
-                        sodium=item.get("Sodium"),
-                        total_carbohydrate=item.get("Total Carbohydrate"),
-                        dietary_fiber=item.get("Dietary Fiber"),
-                        total_sugars=item.get("Total Sugars"),
-                        protein=item.get("Protein"),
-                        vitamin_d=item.get("Vitamin D"),
-                        calcium=item.get("Calcium"),
-                        iron=item.get("Iron"),
-                        potassium=item.get("Potassium"),
-                        ingredients=item.get("Ingredients"),
-                        allergens=item.get("Allergens"),
-                    )
+                    name = item.get("name", "")
+                    if not name:
+                        continue
+
+                    menu_item = db.query(MenuItem).filter_by(name=name).first()
+                    if not menu_item:
+                        menu_item = MenuItem(
+                            name=name,
+                            serving_size=item.get("Serving Size"),
+                            calories=item.get("Calories"),
+                            total_fat=item.get("Total Fat"),
+                            saturated_fat=item.get("Saturated Fat"),
+                            trans_fat=item.get("Trans Fat"),
+                            cholesterol=item.get("Cholesterol"),
+                            sodium=item.get("Sodium"),
+                            total_carbohydrate=item.get("Total Carbohydrate"),
+                            dietary_fiber=item.get("Dietary Fiber"),
+                            total_sugars=item.get("Total Sugars"),
+                            protein=item.get("Protein"),
+                            vitamin_d=item.get("Vitamin D"),
+                            calcium=item.get("Calcium"),
+                            iron=item.get("Iron"),
+                            potassium=item.get("Potassium"),
+                            ingredients=item.get("Ingredients"),
+                            allergens=item.get("Allergens"),
+                        )
+                        db.add(menu_item)
+                        db.flush()
+
                     try:
                         with db.begin_nested():
-                            db.add(menu_item)
+                            db.add(MealMenuItem(meal_id=meal.id, menu_item_id=menu_item.id))
                     except IntegrityError:
                         pass
 

@@ -1,8 +1,8 @@
 from database import SessionLocal, engine, Base
-from db.models.models import DiningHall, Meal, MenuItem
+from db.models.models import DiningHall, Meal, MenuItem, MealMenuItem
 from db.models.userModels import User, JournalEntry
 from sqlalchemy import func
-from datetime import datetime as dt
+from datetime import datetime as dt, date as date_type
 
 def postUser(data):
     db = SessionLocal()
@@ -163,14 +163,14 @@ def saveOnboarding(data):
         db.close()
 
 def getMealIds(data):
-    date = data["date"]
+    date = dt.strptime(data["date"], "%Y-%m-%d").date()
 
     db = SessionLocal()
-    items = (db.query(Meal).filter(Meal.date).all())
-
-    res = [item.id for item in items]
-
-    return res
+    try:
+        items = db.query(Meal).filter(Meal.date == date).all()
+        return [item.id for item in items]
+    finally:
+        db.close()
 
 
 def getMenuItem(query: str):
@@ -356,66 +356,92 @@ def getJournalRange(data):
     db = SessionLocal()
     userEmail = data["email"]
     start = dt.strptime(data['start'], "%Y-%m-%d").date()
-    end = dt.strptime(data['end'], "%Y-%m-%d").date()
+    end   = dt.strptime(data['end'],   "%Y-%m-%d").date()
 
-    user = db.query(User).filter(User.email == userEmail).first()
-    if not user:
-        return {}
+    try:
+        user = db.query(User).filter(User.email == userEmail).first()
+        if not user:
+            return {"days": [], "averages": {}}
 
-    journals = (
-        db.query(JournalEntry).filter(
-            JournalEntry.date <= start, 
-            JournalEntry.date >= end,
-            JournalEntry.user_id == user.user_id
+        rows = (
+            db.query(
+                JournalEntry.date.label("date"),
+                func.coalesce(func.sum(MenuItem.calories),           0).label("calories"),
+                func.coalesce(func.sum(MenuItem.protein),            0).label("protein"),
+                func.coalesce(func.sum(MenuItem.total_carbohydrate), 0).label("carbs"),
+                func.coalesce(func.sum(MenuItem.total_fat),          0).label("fat"),
+                func.coalesce(func.sum(MenuItem.dietary_fiber),      0).label("fiber"),
+                func.coalesce(func.sum(MenuItem.sodium),             0).label("sodium"),
+                func.coalesce(func.sum(MenuItem.total_sugars),       0).label("sugar"),
+                func.coalesce(func.sum(MenuItem.saturated_fat),      0).label("saturated_fat"),
+                func.coalesce(func.sum(MenuItem.cholesterol),        0).label("cholesterol"),
+                func.coalesce(func.sum(MenuItem.vitamin_d),          0).label("vitamin_d"),
+                func.coalesce(func.sum(MenuItem.calcium),            0).label("calcium"),
+                func.coalesce(func.sum(MenuItem.iron),               0).label("iron"),
+                func.coalesce(func.sum(MenuItem.potassium),          0).label("potassium"),
             )
-    )
+            .join(MenuItem, MenuItem.id == JournalEntry.menu_id)
+            .filter(
+                JournalEntry.user_id == user.user_id,
+                JournalEntry.date    >= start,
+                JournalEntry.date    <= end,
+            )
+            .group_by(JournalEntry.date)
+            .order_by(JournalEntry.date)
+            .all()
+        )
 
-    return {journal.id: journal for journal in journals}
+        fields = [
+            "calories", "protein", "carbs", "fat", "fiber",
+            "sodium", "sugar", "saturated_fat", "cholesterol",
+            "vitamin_d", "calcium", "iron", "potassium",
+        ]
+
+        days = [
+            {"date": str(row.date), **{f: round(float(getattr(row, f) or 0), 1) for f in fields}}
+            for row in rows
+        ]
+
+        if days:
+            averages = {f: round(sum(d[f] for d in days) / len(days), 1) for f in fields}
+        else:
+            averages = {f: 0.0 for f in fields}
+
+        return {"days": days, "averages": averages}
+    finally:
+        db.close()
 
 
 
-MEAL_LABEL = {
-    1: "Breakfast",
-    2: "Lunch",
-    3: "Dinner",
-    5: "Late Night",
-    6: "After 11am",
-    7: "Menu",
-    8: "All Day",
-}
 
-# Ordered so the frontend receives meals in a logical sequence
+
+MEAL_LABEL = {1: "Breakfast", 2: "Lunch", 3: "Dinner", 5: "Late Night", 6: "After 11am", 7: "Menu", 8: "All Day"}
 MEAL_ORDER = [1, 2, 3, 5, 6, 7, 8]
 
-
 def getDHMenu(data):
-    from datetime import date as date_type
-    dining_hall_name = data["dining_hall"]
     date_str = data.get("date")
     query_date = dt.strptime(date_str, "%Y-%m-%d").date() if date_str else date_type.today()
 
     db = SessionLocal()
     try:
         rows = (
-            db.query(Meal, MenuItem)
-            .join(DiningHall, DiningHall.id == Meal.diningId)
-            .join(MenuItem, MenuItem.mealId == Meal.id)
-            .filter(
-                DiningHall.name == dining_hall_name,
-                Meal.date == query_date,
-            )
-            .order_by(Meal.mealId)
+            db.query(DiningHall, Meal, MenuItem)
+            .join(Meal, Meal.diningId == DiningHall.id)
+            .join(MealMenuItem, MealMenuItem.meal_id == Meal.id)
+            .join(MenuItem, MenuItem.id == MealMenuItem.menu_item_id)
+            .filter(Meal.date == query_date)
+            .order_by(DiningHall.name, Meal.mealId)
             .all()
         )
 
-        # Build in MEAL_ORDER so the dict is ordered Breakfast → Lunch → …
-        buckets = {MEAL_LABEL[mid]: [] for mid in MEAL_ORDER}
-
-        for meal, item in rows:
+        result = {}
+        for dh, meal, item in rows:
             label = MEAL_LABEL.get(meal.mealId)
             if label is None:
                 continue
-            buckets[label].append({
+            if dh.name not in result:
+                result[dh.name] = {MEAL_LABEL[mid]: [] for mid in MEAL_ORDER}
+            result[dh.name].setdefault(label, []).append({
                 "id":                 item.id,
                 "name":               item.name,
                 "serving_size":       item.serving_size,
@@ -436,8 +462,10 @@ def getDHMenu(data):
                 "allergens":          item.allergens,
             })
 
-        # Drop empty meal slots (location doesn't serve that meal)
-        return {label: items for label, items in buckets.items() if items}
+        for dh_name in result:
+            result[dh_name] = {label: items for label, items in result[dh_name].items() if items}
+
+        return result
     finally:
         db.close()
 

@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import {
   View,
   Text,
+
   ScrollView,
   Pressable,
   TouchableOpacity,
@@ -55,8 +56,9 @@ function addDays(d, n) {
   return copy;
 }
 
-function todayString() {
-  return new Date().toISOString().split("T")[0];
+function localDateStr(d) {
+  const dt = d ?? new Date();
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
 
 export default function Dashboard() {
@@ -74,7 +76,7 @@ export default function Dashboard() {
   const isToday   = sameDay(date, today);
 
   useEffect(() => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = localDateStr(date);
     // Reset immediately so stale data never shows while loading
     setMealLog({ 1: {}, 2: {}, 3: {}, 4: {} });
     if (!userEmail) return;
@@ -153,7 +155,7 @@ export default function Dashboard() {
     });
     post("/addToMeal", {
       user_email:   userEmail,
-      date:         date.toISOString().split("T")[0],
+      date:         localDateStr(date),
       meal_num:     mealId,
       menu_item_id: food.id,
     }).catch(e => console.log("addToMeal error:", e.message));
@@ -203,7 +205,7 @@ export default function Dashboard() {
     setEditingEntry(null);
     post("/deleteFromMeal", {
       user_email:   userEmail,
-      date:         date.toISOString().split("T")[0],
+      date:         localDateStr(date),
       meal_num:     mealTypeId,
       menu_item_id: food.id,
     }).catch(e => console.log("deleteFromMeal error:", e.message));
@@ -218,7 +220,6 @@ export default function Dashboard() {
       <StatusBar barStyle="light-content" />
 
       <View style={s.header}>
-        <Text style={s.logo}>CampusPlates</Text>
         <Pressable
           style={({ pressed }) => [s.logoutBtn, pressed && s.pressed]}
           onPress={openDrawer}
@@ -226,6 +227,7 @@ export default function Dashboard() {
         >
           <Ionicons name="menu-outline" size={22} color={C.soft} />
         </Pressable>
+        <Text style={s.logo}>CampusPlates</Text>
       </View>
 
       <ScrollView

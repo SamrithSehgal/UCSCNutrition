@@ -1,28 +1,177 @@
-import { View, Text, ScrollView, Pressable, StyleSheet, SafeAreaView, StatusBar } from "react-native";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  View, Text, ScrollView, Pressable, StyleSheet,
+  SafeAreaView, StatusBar, ActivityIndicator,
+} from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import auth from "@react-native-firebase/auth";
 import { useDrawer } from "../drawerContext";
 import { C } from "../styles/dashboard.styles";
+import { post, get } from "../api";
 
-const MACRO_BARS = [
-  { label: "Protein",  pct: 0.72, color: C.blue,       unit: "g", value: 118 },
-  { label: "Carbs",    pct: 0.55, color: C.mLunch,     unit: "g", value: 210 },
-  { label: "Fat",      pct: 0.41, color: C.mBreakfast, unit: "g", value: 58  },
-  { label: "Fiber",    pct: 0.30, color: C.green,      unit: "g", value: 14  },
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const RANGES = ["1W", "1M", "6M", "1Y"];
+const RANGE_DAYS = { "1W": 7, "1M": 30, "6M": 182, "1Y": 365 };
+
+const FIELDS = [
+  "calories", "protein", "carbs", "fat", "fiber",
+  "sodium", "sugar", "saturated_fat", "cholesterol",
+  "vitamin_d", "calcium", "iron", "potassium",
 ];
 
-const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
-const WEEK_VALS = [0.55, 0.88, 0.71, 0.64, 0.92, 0.45, 0.0];
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 
-export default function Analytics() {
-  const { openDrawer } = useDrawer();
-  const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+function fmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getStartEnd(label) {
+  const days = RANGE_DAYS[label];
+  const now = new Date();
+  const end = fmtDate(now);
+  const startD = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1);
+  return { start: fmtDate(startD), end };
+}
+
+function fillDays(days, startStr, totalDays) {
+  const map = {};
+  days.forEach((d) => { map[d.date] = d.calories; });
+  const [y, m, day] = startStr.split("-").map(Number);
+  return Array.from({ length: totalDays }, (_, i) => {
+    const d = new Date(y, m - 1, day + i);
+    const key = fmtDate(d);
+    return { date: key, cal: map[key] ?? 0 };
+  });
+}
+
+// ─── Aggregation for 6M / 1Y chart ──────────────────────────────────────────
+
+function aggregateWeekly(allDays) {
+  const out = [];
+  for (let i = 0; i < allDays.length; i += 7) {
+    const slice = allDays.slice(i, i + 7).filter((d) => d.cal > 0);
+    out.push({
+      date: allDays[i].date,
+      cal: slice.length ? slice.reduce((s, d) => s + d.cal, 0) / slice.length : 0,
+    });
+  }
+  return out;
+}
+
+function aggregateMonthly(allDays) {
+  const months = {};
+  allDays.forEach((d) => {
+    const key = d.date.slice(0, 7);
+    if (!months[key]) months[key] = { date: d.date, total: 0, count: 0 };
+    if (d.cal > 0) { months[key].total += d.cal; months[key].count++; }
+  });
+  return Object.values(months).map((m) => ({
+    date: m.date,
+    cal: m.count ? m.total / m.count : 0,
+  }));
+}
+
+// ─── Bar chart ───────────────────────────────────────────────────────────────
+
+function BarChart({ allDays, rangeLabel, goalCal }) {
+  let bars;
+  if (rangeLabel === "6M") bars = aggregateWeekly(allDays);
+  else if (rangeLabel === "1Y") bars = aggregateMonthly(allDays);
+  else bars = allDays;
+
+  const maxCal = Math.max(...bars.map((b) => b.cal), goalCal || 0, 1);
+  const today = fmtDate(new Date());
 
   return (
-    <SafeAreaView style={as.safe}>
-      <StatusBar barStyle="light-content" />
+    <View style={{ flexDirection: "row", alignItems: "flex-end", height: 72, gap: 1.5 }}>
+      {bars.map((b, i) => {
+        const pct = b.cal / maxCal;
+        const barH = b.cal > 0 ? Math.max(pct * 64, 3) : 2;
+        const isToday = b.date === today;
+        return (
+          <View key={i} style={{ flex: 1, height: 72, justifyContent: "flex-end" }}>
+            <View
+              style={{
+                height: barH,
+                backgroundColor: b.cal === 0 ? C.raised : isToday ? C.blue : "#3A5878",
+                borderRadius: 2,
+                opacity: b.cal === 0 ? 0.5 : 1,
+              }}
+            />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
+// ─── Macro card ──────────────────────────────────────────────────────────────
+
+function MacroCard({ label, value, unit, color, goal }) {
+  const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
+  return (
+    <View style={as.macroCard}>
+      <Text style={as.macroLabel}>{label}</Text>
+      <Text style={[as.macroVal, { color }]}>
+        {Math.round(value)}
+        <Text style={as.macroUnit}>{unit}</Text>
+      </Text>
+      <View style={as.macroTrack}>
+        <View
+          style={[
+            as.macroFill,
+            { width: `${Math.round(pct * 100)}%`, backgroundColor: color },
+          ]}
+        />
+      </View>
+      {goal > 0 && (
+        <Text style={as.macroGoal}>of {Math.round(goal)}{unit}</Text>
+      )}
+    </View>
+  );
+}
+
+// ─── Micro row ───────────────────────────────────────────────────────────────
+
+function MicroRow({ label, value, unit, goal, accent }) {
+  const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
+  const over = goal > 0 && value > goal * 1.05;
+  const fillColor = over ? C.danger : (accent ?? C.faint);
+  return (
+    <View style={as.microRow}>
+      <View style={as.microLabelRow}>
+        <Text style={as.microLabel}>{label}</Text>
+        <Text style={[as.microVal, over && { color: C.danger }]}>
+          {Math.round(value)}
+          <Text style={as.microUnit}> {unit}</Text>
+        </Text>
+      </View>
+      <View style={as.microTrack}>
+        <View
+          style={[
+            as.microFill,
+            { width: `${Math.round(Math.min(pct, 1) * 100)}%`, backgroundColor: fillColor },
+          ]}
+        />
+      </View>
+      {goal > 0 && (
+        <Text style={[as.microGoal, over && { color: C.danger }]}>
+          {over
+            ? `${Math.round(((value - goal) / goal) * 100)}% over`
+            : `${Math.round(pct * 100)}% of goal`}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// ─── Header + range pills ────────────────────────────────────────────────────
+
+function Header({ openDrawer, range, setRange, disabled }) {
+  return (
+    <>
       <View style={as.header}>
-        <Text style={as.title}>Analytics</Text>
         <Pressable
           style={({ pressed }) => [as.menuBtn, pressed && { opacity: 0.45 }]}
           onPress={openDrawer}
@@ -30,112 +179,255 @@ export default function Analytics() {
         >
           <Ionicons name="menu-outline" size={22} color={C.soft} />
         </Pressable>
+        <Text style={as.title}>Analytics</Text>
       </View>
 
-      <View style={as.subRow}>
-        <Ionicons name="trending-up-outline" size={13} color={C.faint} style={{ marginRight: 5 }} />
-        <Text style={as.subText}>This week's nutrition overview</Text>
+      <View style={as.pillRow}>
+        {RANGES.map((r) => (
+          <Pressable
+            key={r}
+            disabled={disabled}
+            onPress={() => setRange(r)}
+            style={[as.pill, r === range && as.pillActive]}
+          >
+            <Text style={[as.pillTxt, r === range && as.pillTxtActive]}>{r}</Text>
+          </Pressable>
+        ))}
       </View>
+    </>
+  );
+}
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={as.scroll}
-      >
-        {/* Calorie streak card */}
-        <View style={as.card}>
-          <View style={as.cardHeader}>
-            <Text style={as.cardTitle}>Weekly Calories</Text>
-            <View style={as.badgeRow}>
-              <Ionicons name="flame-outline" size={13} color={C.mBreakfast} />
-              <Text style={[as.badge, { color: C.mBreakfast }]}>5 day streak</Text>
-            </View>
-          </View>
+// ─── Main screen ─────────────────────────────────────────────────────────────
 
-          <View style={as.weekRow}>
-            {WEEK_DAYS.map((d, i) => {
-              const isToday  = i === todayIdx;
-              const isEmpty  = WEEK_VALS[i] === 0;
-              const barH     = isEmpty ? 4 : Math.max(WEEK_VALS[i] * 72, 8);
-              return (
-                <View key={i} style={as.weekCol}>
-                  <View style={as.barTrack}>
-                    <View
-                      style={[
-                        as.barFill,
-                        { height: barH, backgroundColor: isToday ? C.blue : C.raised },
-                        isEmpty && { backgroundColor: C.border, opacity: 0.4 },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[as.dayLabel, isToday && { color: C.blue, fontWeight: "600" }]}>
-                    {d}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
+export default function Analytics() {
+  const { openDrawer } = useDrawer();
+  const [range, setRange]   = useState("1W");
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]   = useState(null);
+  const goalsRef = useRef(null);
+  const [goals, setGoals]   = useState(null);
 
-          <View style={as.calSummaryRow}>
-            <View style={as.calStat}>
-              <Text style={as.calStatVal}>1,840</Text>
-              <Text style={as.calStatLbl}>Avg / day</Text>
-            </View>
-            <View style={as.calStatDivider} />
-            <View style={as.calStat}>
-              <Text style={as.calStatVal}>2,000</Text>
-              <Text style={as.calStatLbl}>Daily goal</Text>
-            </View>
-            <View style={as.calStatDivider} />
-            <View style={as.calStat}>
-              <Text style={[as.calStatVal, { color: C.green }]}>−160</Text>
-              <Text style={as.calStatLbl}>Avg deficit</Text>
-            </View>
-          </View>
+  const fetchAll = useCallback(async (r) => {
+    const email = auth().currentUser?.email;
+    if (!email) return;
+    const { start, end } = getStartEnd(r);
+    setLoading(true);
+    setError(null);
+    try {
+      const goalsPromise = goalsRef.current
+        ? Promise.resolve(goalsRef.current)
+        : get(`/getUserGoals?email=${encodeURIComponent(email)}`);
+      const [rangeRes, goalsRes] = await Promise.all([
+        post("/getJournalRange", { email, start, end }),
+        goalsPromise,
+      ]);
+      setData(rangeRes);
+      if (!goalsRef.current) {
+        goalsRef.current = goalsRes;
+        setGoals(goalsRes);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchAll(range); }, [range]);
+
+  // ── Derived values ──────────────────────────────────────────────────────
+  const { start } = getStartEnd(range);
+  const totalDays = RANGE_DAYS[range];
+  const rawDays   = data?.days ?? [];
+  const avgs      = data?.averages ?? {};
+  const allDays   = fillDays(rawDays, start, totalDays);
+  const logRate   = totalDays > 0 ? Math.round((rawDays.length / totalDays) * 100) : 0;
+  const avgCal    = Math.round(avgs.calories || 0);
+  const goalCal   = goals?.goal_calories || 0;
+  const calDiff   = goalCal && avgCal ? avgCal - goalCal : null;
+
+  // ── Render ──────────────────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={as.safe}>
+      <StatusBar barStyle="light-content" />
+      <Header openDrawer={openDrawer} range={range} setRange={setRange} disabled={loading} />
+
+      {loading ? (
+        <View style={as.center}>
+          <ActivityIndicator color={C.soft} />
         </View>
-
-        {/* Macro breakdown */}
-        <View style={as.card}>
-          <Text style={as.cardTitle}>Macros — Today</Text>
-          <View style={as.macroList}>
-            {MACRO_BARS.map((m) => (
-              <View key={m.label} style={as.macroRow}>
-                <View style={as.macroLabelRow}>
-                  <Text style={as.macroLabel}>{m.label}</Text>
-                  <Text style={[as.macroVal, { color: m.color }]}>
-                    {m.value}{m.unit}
-                  </Text>
-                </View>
-                <View style={as.macroTrack}>
-                  <View
-                    style={[
-                      as.macroFill,
-                      { width: `${m.pct * 100}%`, backgroundColor: m.color },
-                    ]}
-                  />
-                </View>
+      ) : error ? (
+        <View style={as.center}>
+          <Ionicons name="cloud-offline-outline" size={28} color={C.faint} />
+          <Text style={as.errTxt}>Couldn't load data</Text>
+          <Pressable onPress={() => fetchAll(range)} style={as.retryBtn}>
+            <Text style={as.retryTxt}>Try again</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={as.scroll}
+        >
+          {/* ── Calorie hero ── */}
+          <View style={as.heroCard}>
+            <View style={as.heroTop}>
+              <View>
+                <Text style={as.heroNum}>{avgCal || "—"}</Text>
+                <Text style={as.heroSub}>avg calories / day</Text>
               </View>
-            ))}
-          </View>
-        </View>
+              {calDiff !== null && (
+                <View
+                  style={[
+                    as.diffBadge,
+                    {
+                      backgroundColor:
+                        calDiff > 0
+                          ? "rgba(158,64,64,0.12)"
+                          : "rgba(74,143,90,0.12)",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      as.diffTxt,
+                      { color: calDiff > 0 ? C.danger : C.green },
+                    ]}
+                  >
+                    {calDiff > 0 ? "+" : ""}
+                    {calDiff} vs goal
+                  </Text>
+                </View>
+              )}
+            </View>
 
-        {/* Coming soon hint */}
-        <View style={[as.card, as.comingSoon]}>
-          <Ionicons name="construct-outline" size={20} color={C.faint} style={{ marginBottom: 10 }} />
-          <Text style={as.comingSoonTitle}>More insights coming</Text>
-          <Text style={as.comingSoonSub}>
-            Trends, goal progress, and nutrient breakdowns over time.
-          </Text>
-        </View>
-      </ScrollView>
+            <BarChart allDays={allDays} rangeLabel={range} goalCal={goalCal} />
+
+            <View style={as.heroFooter}>
+              <Text style={as.heroFooterTxt}>
+                {rawDays.length} day{rawDays.length !== 1 ? "s" : ""} logged
+              </Text>
+              <Text style={as.heroFooterTxt}>{logRate}% consistency</Text>
+            </View>
+          </View>
+
+          {/* ── Macros ── */}
+          <Text style={as.sectionLabel}>MACROS — AVG / DAY</Text>
+          <View style={as.macroSection}>
+            <View style={as.macroRow}>
+              <MacroCard
+                label="Protein"
+                value={avgs.protein || 0}
+                unit="g"
+                color={C.blue}
+                goal={goals?.goal_protein}
+              />
+              <MacroCard
+                label="Carbs"
+                value={avgs.carbs || 0}
+                unit="g"
+                color={C.mLunch}
+                goal={goals?.goal_total_carbohydrate}
+              />
+            </View>
+            <View style={as.macroRow}>
+              <MacroCard
+                label="Fat"
+                value={avgs.fat || 0}
+                unit="g"
+                color={C.mBreakfast}
+                goal={goals?.goal_total_fat}
+              />
+              <MacroCard
+                label="Fiber"
+                value={avgs.fiber || 0}
+                unit="g"
+                color={C.green}
+                goal={goals?.goal_dietary_fiber}
+              />
+            </View>
+          </View>
+
+          {/* ── Micros ── */}
+          <Text style={as.sectionLabel}>MICROS — AVG / DAY</Text>
+          <View style={as.microCard}>
+            <MicroRow
+              label="Sodium"
+              value={avgs.sodium || 0}
+              unit="mg"
+              goal={goals?.goal_sodium}
+            />
+            <View style={as.microSep} />
+            <MicroRow
+              label="Sugar"
+              value={avgs.sugar || 0}
+              unit="g"
+              goal={goals?.goal_total_sugars}
+            />
+            <View style={as.microSep} />
+            <MicroRow
+              label="Saturated Fat"
+              value={avgs.saturated_fat || 0}
+              unit="g"
+              goal={goals?.goal_saturated_fat}
+            />
+            <View style={as.microSep} />
+            <MicroRow
+              label="Cholesterol"
+              value={avgs.cholesterol || 0}
+              unit="mg"
+              goal={goals?.goal_cholesterol}
+            />
+            <View style={as.microSep} />
+            <MicroRow
+              label="Vitamin D"
+              value={avgs.vitamin_d || 0}
+              unit="%dv"
+              goal={goals?.goal_vitamin_d}
+              accent={C.mLunch}
+            />
+            <View style={as.microSep} />
+            <MicroRow
+              label="Calcium"
+              value={avgs.calcium || 0}
+              unit="%dv"
+              goal={goals?.goal_calcium}
+              accent={C.mLunch}
+            />
+            <View style={as.microSep} />
+            <MicroRow
+              label="Iron"
+              value={avgs.iron || 0}
+              unit="%dv"
+              goal={goals?.goal_iron}
+              accent={C.mLunch}
+            />
+            <View style={as.microSep} />
+            <MicroRow
+              label="Potassium"
+              value={avgs.potassium || 0}
+              unit="%dv"
+              goal={goals?.goal_potassium}
+              accent={C.mLunch}
+            />
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const as = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
+  safe:   { flex: 1, backgroundColor: C.bg },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+
+  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -157,169 +449,185 @@ const as = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  subRow: {
+
+  // Range pills
+  pillRow: {
     flexDirection: "row",
-    alignItems: "center",
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 18,
-    paddingTop: 4,
+    gap: 8,
   },
-  subText: {
+  pill: {
+    paddingHorizontal: 18,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  pillActive: {
+    backgroundColor: C.blue,
+    borderColor: C.blue,
+  },
+  pillTxt: {
     fontSize: 13,
-    color: C.faint,
-    fontWeight: "400",
+    fontWeight: "500",
+    color: C.soft,
   },
+  pillTxtActive: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+
+  // Scroll
   scroll: {
     paddingHorizontal: 14,
     paddingBottom: 48,
     gap: 10,
   },
-  card: {
+
+  // Hero card
+  heroCard: {
+    backgroundColor: C.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 20,
+    gap: 18,
+  },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  heroNum: {
+    fontSize: 64,
+    fontWeight: "200",
+    color: C.text,
+    letterSpacing: -2,
+    lineHeight: 68,
+  },
+  heroSub: {
+    fontSize: 12,
+    color: C.faint,
+    letterSpacing: 0.3,
+    marginTop: 2,
+  },
+  diffBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  diffTxt: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  heroFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    paddingTop: 14,
+  },
+  heroFooterTxt: {
+    fontSize: 12,
+    color: C.faint,
+  },
+
+  // Section label
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: C.faint,
+    letterSpacing: 1.2,
+    marginTop: 6,
+    marginBottom: 0,
+    paddingHorizontal: 2,
+  },
+
+  // Macro grid
+  macroSection: { gap: 8 },
+  macroRow: { flexDirection: "row", gap: 8 },
+  macroCard: {
+    flex: 1,
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+    gap: 8,
+  },
+  macroLabel: {
+    fontSize: 11,
+    color: C.soft,
+    fontWeight: "500",
+    letterSpacing: 0.2,
+  },
+  macroVal: {
+    fontSize: 28,
+    fontWeight: "300",
+    letterSpacing: -0.5,
+    color: C.text,
+  },
+  macroUnit: {
+    fontSize: 13,
+    fontWeight: "400",
+    letterSpacing: 0,
+    color: C.soft,
+  },
+  macroTrack: {
+    height: 3,
+    backgroundColor: C.raised,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  macroFill: { height: 3, borderRadius: 2 },
+  macroGoal: { fontSize: 10, color: C.faint },
+
+  // Micro list
+  microCard: {
     backgroundColor: C.surface,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: C.border,
     padding: 18,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: C.text,
-    letterSpacing: -0.1,
-    marginBottom: 16,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: C.raised,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  badge: {
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 0.1,
-  },
-
-  // Week bar chart
-  weekRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    marginBottom: 16,
-    paddingHorizontal: 2,
-  },
-  weekCol: {
-    alignItems: "center",
-    flex: 1,
-    gap: 6,
-  },
-  barTrack: {
-    height: 72,
-    justifyContent: "flex-end",
-  },
-  barFill: {
-    width: 22,
-    borderRadius: 5,
-    minHeight: 4,
-  },
-  dayLabel: {
-    fontSize: 11,
-    color: C.faint,
-    fontWeight: "500",
-  },
-
-  calSummaryRow: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    paddingTop: 14,
-  },
-  calStat: {
-    flex: 1,
-    alignItems: "center",
-    gap: 3,
-  },
-  calStatDivider: {
-    width: 1,
-    backgroundColor: C.border,
-    alignSelf: "stretch",
-  },
-  calStatVal: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: C.text,
-    fontVariant: ["tabular-nums"],
-  },
-  calStatLbl: {
-    fontSize: 10,
-    color: C.soft,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-
-  // Macro bars
-  macroList: {
     gap: 14,
-    marginTop: -4,
   },
-  macroRow: {
-    gap: 7,
-  },
-  macroLabelRow: {
+  microSep: { height: 1, backgroundColor: C.border },
+  microRow: { gap: 6 },
+  microLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "baseline",
   },
-  macroLabel: {
-    fontSize: 13,
-    color: C.soft,
-    fontWeight: "500",
-  },
-  macroVal: {
+  microLabel: { fontSize: 13, color: C.soft, fontWeight: "500" },
+  microVal: {
     fontSize: 13,
     fontWeight: "600",
+    color: C.text,
     fontVariant: ["tabular-nums"],
   },
-  macroTrack: {
-    height: 5,
+  microUnit: { fontSize: 11, fontWeight: "400", color: C.faint },
+  microTrack: {
+    height: 3,
     backgroundColor: C.raised,
-    borderRadius: 3,
+    borderRadius: 2,
     overflow: "hidden",
   },
-  macroFill: {
-    height: 5,
-    borderRadius: 3,
-  },
+  microFill: { height: 3, borderRadius: 2 },
+  microGoal: { fontSize: 10, color: C.faint },
 
-  // Coming soon
-  comingSoon: {
-    alignItems: "center",
-    paddingVertical: 28,
-    backgroundColor: C.raised,
-    borderStyle: "dashed",
+  // States
+  errTxt: { fontSize: 14, color: C.soft },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
-  comingSoonTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: C.soft,
-    marginBottom: 6,
-  },
-  comingSoonSub: {
-    fontSize: 13,
-    color: C.faint,
-    textAlign: "center",
-    lineHeight: 19,
-    maxWidth: 220,
-  },
+  retryTxt: { fontSize: 13, color: C.soft },
 });
