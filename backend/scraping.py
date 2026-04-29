@@ -179,6 +179,8 @@ def getData():
             for label in labels:
                 nutritionReq = requests.get(base + label, headers=headers)
                 res = parseLabel(nutritionReq.content)
+                if res.get("Calories") is None:
+                    continue
                 recipes.append(res)
 
             allFoodTree[place][meal] = recipes

@@ -49,7 +49,7 @@ export default function Home() {
         setLoading(false);
         const isTimeout = e?.name === "AbortError";
         setError(isTimeout
-          ? "Server timed out. Is the backend running and reachable?"
+          ? "Server timed out. Please try again?"
           : `Server error: ${e?.message ?? "unknown"}. Check your connection.`
         );
       });

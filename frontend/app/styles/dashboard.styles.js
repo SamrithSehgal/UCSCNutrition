@@ -1,22 +1,22 @@
 import { StyleSheet } from "react-native";
 
 export const C = {
-  bg:      "#111111",
+  bg: "#111111",
   surface: "#1D1D1D",
-  raised:  "#262626",
-  border:  "#303030",
-  text:    "#F2F2F2",
-  soft:    "#8A8A8A",
-  faint:   "#555555",
+  raised: "#262626",
+  border: "#303030",
+  text: "#F2F2F2",
+  soft: "#8A8A8A",
+  faint: "#555555",
 
-  blue:    "#5080BC",
-  green:   "#4A8F5A",
-  danger:  "#9E4040",
+  blue: "#5080BC",
+  green: "#4A8F5A",
+  danger: "#9E4040",
 
   mBreakfast: "#A87050",
-  mLunch:     "#4E7890",
-  mDinner:    "#587868",
-  mSnacks:    "#887058",
+  mLunch: "#4E7890",
+  mDinner: "#587868",
+  mSnacks: "#887058",
 };
 
 export default StyleSheet.create({

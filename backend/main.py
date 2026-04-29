@@ -4,12 +4,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, SessionLocal
 from db.models.models import DiningHall, Meal, MenuItem, MealMenuItem
-from db.models.userModels import User, JournalEntry
+from db.models.userModels import User, JournalEntry, UserSettings
 from db.seed import seed
 from scraping import getData
 from database import get_db
 from db.dbFuncs import postUser as db_postUser, saveOnboarding as db_saveOnboarding
-from db.dbFuncs import getMealIds, getMenuItem, getMealsByDate as db_getMealsByDate, addToMeal as db_addToMeal, deleteFromJournal as db_deleteFromJournal, getJournalTotals as db_getJournalTotals, getJournalByDate as db_getJournalByDate, getUserGoals as db_getUserGoals, getDHMenu as db_getDHMenu, getJournalRange as db_getJournalRange
+from db.dbFuncs import getMealIds, getMenuItem, getMealsByDate as db_getMealsByDate, addToMeal as db_addToMeal, deleteFromJournal as db_deleteFromJournal, getJournalTotals as db_getJournalTotals, getJournalByDate as db_getJournalByDate, getUserGoals as db_getUserGoals, getDHMenu as db_getDHMenu, getJournalRange as db_getJournalRange, getUserSettings as db_getUserSettings, updateUserSettings as db_updateUserSettings, getUserProfile as db_getUserProfile, updateUserProfile as db_updateUserProfile
+from ai.aiFuncs import generateNutritionSummary
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi import Depends
@@ -41,6 +42,26 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS goal_calcium FLOAT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS goal_iron FLOAT",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS goal_potassium FLOAT",
+                "ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1",
+                # user_settings — analytics onboarding + AI opt-in
+                "CREATE TABLE IF NOT EXISTS user_settings (user_id INTEGER PRIMARY KEY REFERENCES users(user_id), analytics_onboarded BOOLEAN NOT NULL DEFAULT FALSE, ai_analytics_enabled BOOLEAN NOT NULL DEFAULT FALSE)",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS analytics_onboarded BOOLEAN NOT NULL DEFAULT FALSE",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_analytics_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS theme VARCHAR NOT NULL DEFAULT 'dark'",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS units_system VARCHAR NOT NULL DEFAULT 'imperial'",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS default_range VARCHAR NOT NULL DEFAULT '1W'",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS compact_view BOOLEAN NOT NULL DEFAULT FALSE",
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS metric_colors TEXT",
+                # users — raw onboarding profile fields
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS sex VARCHAR",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS age INTEGER",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS height_ft INTEGER",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS height_in INTEGER",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight_lbs FLOAT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS goal_weight_lbs FLOAT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS weight_change_rate FLOAT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS activity_level VARCHAR",
             ]
             for sql in migrations:
                 db.execute(text(sql))
@@ -122,6 +143,26 @@ def getUserGoalsRoute(email: str):
 @app.post('/api/getJournalRange')
 def getJournalRangeRoute(data: dict):
     return db_getJournalRange(data)
+
+@app.post('/api/generateNutrientSummary')
+def getSummary(data: dict):
+    return generateNutritionSummary(data)
+
+@app.get('/api/getUserSettings')
+def getUserSettingsRoute(email: str):
+    return db_getUserSettings(email)
+
+@app.post('/api/updateUserSettings')
+def updateUserSettingsRoute(data: dict):
+    return db_updateUserSettings(data)
+
+@app.get('/api/getUserProfile')
+def getUserProfileRoute(email: str):
+    return db_getUserProfile(email)
+
+@app.post('/api/updateUserProfile')
+def updateUserProfileRoute(data: dict):
+    return db_updateUserProfile(data)
 
 if __name__ == "__main__":
     import uvicorn

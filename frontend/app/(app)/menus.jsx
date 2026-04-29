@@ -18,31 +18,31 @@ const DINING_HALLS = [
 ];
 
 const CAFES = [
-  { name: "Banana Joe's",           type: "Cafe",    icon: "cafe-outline"   },
-  { name: "Oakes Cafe",             type: "Cafe",    icon: "cafe-outline"   },
-  { name: "Global Village Cafe",    type: "Cafe",    icon: "cafe-outline"   },
-  { name: "Owl's Nest Cafe",        type: "Cafe",    icon: "cafe-outline"   },
-  { name: "UCen Coffee Bar",        type: "Coffee",  icon: "cafe-outline"   },
-  { name: "Stevenson Coffee House", type: "Coffee",  icon: "cafe-outline"   },
-  { name: "Perk Coffee Bar",        type: "Coffee",  icon: "cafe-outline"   },
-  { name: "Porter Market",          type: "Market",  icon: "bag-outline"    },
-  { name: "Merrill Market",         type: "Market",  icon: "bag-outline"    },
+  { name: "Banana Joe's", type: "Cafe", icon: "cafe-outline" },
+  { name: "Oakes Cafe", type: "Cafe", icon: "cafe-outline" },
+  { name: "Global Village Cafe", type: "Cafe", icon: "cafe-outline" },
+  { name: "Owl's Nest Cafe", type: "Cafe", icon: "cafe-outline" },
+  { name: "UCen Coffee Bar", type: "Coffee", icon: "cafe-outline" },
+  { name: "Stevenson Coffee House", type: "Coffee", icon: "cafe-outline" },
+  { name: "Perk Coffee Bar", type: "Coffee", icon: "cafe-outline" },
+  { name: "Porter Market", type: "Market", icon: "bag-outline" },
+  { name: "Merrill Market", type: "Market", icon: "bag-outline" },
 ];
 
 const MEAL_COLOR = {
-  "Breakfast":  C.mBreakfast,
-  "Lunch":      C.mLunch,
-  "Dinner":     C.mDinner,
+  "Breakfast": C.mBreakfast,
+  "Lunch": C.mLunch,
+  "Dinner": C.mDinner,
   "Late Night": C.mSnacks,
   "After 11am": C.mDinner,
-  "Menu":       C.faint,
-  "All Day":    C.faint,
+  "Menu": C.faint,
+  "All Day": C.faint,
 };
 
 const TYPE_COLOR = {
-  "Cafe":    C.mLunch,
-  "Coffee":  C.mBreakfast,
-  "Market":  C.green,
+  "Cafe": C.mLunch,
+  "Coffee": C.mBreakfast,
+  "Market": C.green,
 };
 
 function goToHall(name) {

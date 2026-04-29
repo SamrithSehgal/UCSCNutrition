@@ -20,10 +20,10 @@ import {
   Platform,
 } from "react-native";
 
-const SCREEN_H    = Dimensions.get("window").height;
-const SCREEN_W    = Dimensions.get("window").width;
+const SCREEN_H = Dimensions.get("window").height;
+const SCREEN_W = Dimensions.get("window").width;
 const SNAP_PARTIAL = SCREEN_H * 0.28;
-const SNAP_FULL    = Platform.OS === "android" ? 24 : 44;
+const SNAP_FULL = Platform.OS === "android" ? 24 : 44;
 import s, { C } from "../styles/dashboard.styles";
 import auth from "@react-native-firebase/auth";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -32,15 +32,15 @@ import { get, post, postQuery } from "../api";
 
 const MEALS = [
   { key: "breakfast", label: "Breakfast", mealId: 1, accent: C.mBreakfast },
-  { key: "lunch",     label: "Lunch",     mealId: 2, accent: C.mLunch     },
-  { key: "dinner",    label: "Dinner",    mealId: 3, accent: C.mDinner    },
-  { key: "snacks",    label: "Snacks",    mealId: 4, accent: C.mSnacks    },
+  { key: "lunch", label: "Lunch", mealId: 2, accent: C.mLunch },
+  { key: "dinner", label: "Dinner", mealId: 3, accent: C.mDinner },
+  { key: "snacks", label: "Snacks", mealId: 4, accent: C.mSnacks },
 ];
 
 const GOAL = 2000;
 
-const WEEKDAYS  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS    = ["January","February","March","April","May","June",
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["January","February","March","April","May","June",
                    "July","August","September","October","November","December"];
 const DAYS_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
@@ -72,8 +72,8 @@ export default function Dashboard() {
 
   const { openDrawer } = useDrawer();
   const userEmail = auth().currentUser?.email ?? null;
-  const today     = new Date();
-  const isToday   = sameDay(date, today);
+  const today = new Date();
+  const isToday = sameDay(date, today);
 
   useEffect(() => {
     const dateStr = localDateStr(date);
@@ -86,17 +86,18 @@ export default function Dashboard() {
         [1, 2, 3, 4].forEach(mealNum => {
           (data[String(mealNum)] ?? []).forEach(item => {
             const baseCal = Math.round(item.calories ?? 0);
-            const baseP   = Math.round(item.protein  ?? 0);
-            const baseC   = Math.round(item.total_carbohydrate ?? 0);
-            const baseF   = Math.round(item.total_fat ?? 0);
+            const baseP = Math.round(item.protein ?? 0);
+            const baseC = Math.round(item.total_carbohydrate ?? 0);
+            const baseF = Math.round(item.total_fat ?? 0);
+            const qty = item.quantity ?? 1;
             newLog[mealNum][item.id] = {
               ...item,
-              qty: 1,
+              qty,
               baseCal, baseP, baseC, baseF,
-              cal: baseCal,
-              p:   baseP,
-              c:   baseC,
-              f:   baseF,
+              cal: Math.round(baseCal * qty),
+              p: Math.round(baseP * qty),
+              c: Math.round(baseC * qty),
+              f: Math.round(baseF * qty),
             };
           });
         });
@@ -110,7 +111,7 @@ export default function Dashboard() {
     [mealLog]
   );
   const totalCal = useMemo(() => allFoods.reduce((s, f) => s + f.cal, 0), [allFoods]);
-  const macros   = useMemo(() => ({
+  const macros = useMemo(() => ({
     p: allFoods.reduce((s, f) => s + (f.p || 0), 0),
     c: allFoods.reduce((s, f) => s + (f.c || 0), 0),
     f: allFoods.reduce((s, f) => s + (f.f || 0), 0),
@@ -125,15 +126,15 @@ export default function Dashboard() {
 
   const calorieGoal = Math.round(goals?.goal_calories ?? GOAL);
   const remaining = calorieGoal - totalCal;
-  const progress  = Math.min(Math.max(totalCal / calorieGoal, 0), 1);
-  const isOver    = remaining < 0;
+  const progress = Math.min(Math.max(totalCal / calorieGoal, 0), 1);
+  const isOver = remaining < 0;
 
   function handleFoodAdded(food, mealId) {
     const baseCal = Math.round(food.calories ?? 0);
-    const baseP   = Math.round(food.protein  ?? 0);
-    const baseC   = Math.round(food.total_carbohydrate ?? 0);
-    const baseF   = Math.round(food.total_fat ?? 0);
-    const qty     = food.qty ?? 1;
+    const baseP = Math.round(food.protein ?? 0);
+    const baseC = Math.round(food.total_carbohydrate ?? 0);
+    const baseF = Math.round(food.total_fat ?? 0);
+    const qty = food.qty ?? 1;
     setMealLog(prev => ({
       ...prev,
       [mealId]: {
@@ -143,9 +144,9 @@ export default function Dashboard() {
           qty,
           baseCal, baseP, baseC, baseF,
           cal: Math.round(baseCal * qty),
-          p:   Math.round(baseP   * qty),
-          c:   Math.round(baseC   * qty),
-          f:   Math.round(baseF   * qty),
+          p: Math.round(baseP * qty),
+          c: Math.round(baseC * qty),
+          f: Math.round(baseF * qty),
         },
       },
     }));
@@ -154,10 +155,11 @@ export default function Dashboard() {
       return [food, ...filtered].slice(0, 20);
     });
     post("/addToMeal", {
-      user_email:   userEmail,
-      date:         localDateStr(date),
-      meal_num:     mealId,
+      user_email: userEmail,
+      date: localDateStr(date),
+      meal_num: mealId,
       menu_item_id: food.id,
+      quantity: qty,
     }).catch(e => console.log("addToMeal error:", e.message));
   }
 
@@ -168,20 +170,20 @@ export default function Dashboard() {
     const foods = Object.values(mealLog).flatMap(m => Object.values(m));
     const sum = key => foods.reduce((acc, f) => acc + Math.round((f[key] ?? 0) * (f.qty ?? 1)), 0);
     return {
-      calories:    sum("calories"),
-      fat:         sum("total_fat"),
-      sat_fat:     sum("saturated_fat"),
-      trans_fat:   sum("trans_fat"),
+      calories: sum("calories"),
+      fat: sum("total_fat"),
+      sat_fat: sum("saturated_fat"),
+      trans_fat: sum("trans_fat"),
       cholesterol: sum("cholesterol"),
-      sodium:      sum("sodium"),
-      carbs:       sum("total_carbohydrate"),
-      fiber:       sum("dietary_fiber"),
-      sugar:       sum("total_sugars"),
-      protein:     sum("protein"),
-      vit_d:       sum("vitamin_d"),
-      calcium:     sum("calcium"),
-      iron:        sum("iron"),
-      potassium:   sum("potassium"),
+      sodium: sum("sodium"),
+      carbs: sum("total_carbohydrate"),
+      fiber: sum("dietary_fiber"),
+      sugar: sum("total_sugars"),
+      protein: sum("protein"),
+      vit_d: sum("vitamin_d"),
+      calcium: sum("calcium"),
+      iron: sum("iron"),
+      potassium: sum("potassium"),
     };
   }, [mealLog]);
 
@@ -204,9 +206,9 @@ export default function Dashboard() {
     });
     setEditingEntry(null);
     post("/deleteFromMeal", {
-      user_email:   userEmail,
-      date:         localDateStr(date),
-      meal_num:     mealTypeId,
+      user_email: userEmail,
+      date: localDateStr(date),
+      meal_num: mealTypeId,
       menu_item_id: food.id,
     }).catch(e => console.log("deleteFromMeal error:", e.message));
   }
@@ -413,7 +415,7 @@ function MealCard({ meal, foods, onAdd, onFoodPress }) {
                 style={({ pressed }) => [s.foodRow, pressed && s.pressed]}
                 onPress={() => onFoodPress(food)}
               >
-                <Text style={s.foodName} numberOfLines={1}>{food.name}</Text>
+                <Text style={s.foodName} numberOfLines={1}>{food.qty > 1 ? `${food.qty}× ` : ""}{food.name}</Text>
                 <Text style={s.foodCal}>{food.cal}</Text>
               </Pressable>
             </View>
@@ -432,10 +434,10 @@ function MealCard({ meal, foods, onAdd, onFoodPress }) {
 }
 
 function FoodRow({ item, onSelect }) {
-  const cal = Math.round(item.calories  ?? 0);
-  const p   = Math.round(item.protein   ?? 0);
-  const c   = Math.round(item.total_carbohydrate ?? 0);
-  const f   = Math.round(item.total_fat ?? 0);
+  const cal = Math.round(item.calories ?? 0);
+  const p = Math.round(item.protein ?? 0);
+  const c = Math.round(item.total_carbohydrate ?? 0);
+  const f = Math.round(item.total_fat ?? 0);
 
   return (
     <Pressable
@@ -501,27 +503,27 @@ function LoggedFoodModal({ visible, food, meal, onClose, onSave, onDelete }) {
 function FoodDetailView({ food, meal, onBack, onSave, panHandlers, initialQty = 1, onDelete }) {
   const [qty, setQty] = useState(initialQty);
 
-  const baseCal  = Math.round(food.calories ?? 0);
-  const baseP    = Math.round(food.protein  ?? 0);
-  const baseC    = Math.round(food.total_carbohydrate ?? 0);
-  const baseF    = Math.round(food.total_fat ?? 0);
-  const baseSF   = Math.round(food.saturated_fat ?? 0);
-  const baseTF   = Math.round(food.trans_fat ?? 0);
+  const baseCal = Math.round(food.calories ?? 0);
+  const baseP = Math.round(food.protein ?? 0);
+  const baseC = Math.round(food.total_carbohydrate ?? 0);
+  const baseF = Math.round(food.total_fat ?? 0);
+  const baseSF = Math.round(food.saturated_fat ?? 0);
+  const baseTF = Math.round(food.trans_fat ?? 0);
   const baseChol = Math.round(food.cholesterol ?? 0);
-  const baseNa   = Math.round(food.sodium ?? 0);
-  const baseFib  = Math.round(food.dietary_fiber ?? 0);
-  const baseSug  = Math.round(food.total_sugars ?? 0);
+  const baseNa = Math.round(food.sodium ?? 0);
+  const baseFib = Math.round(food.dietary_fiber ?? 0);
+  const baseSug = Math.round(food.total_sugars ?? 0);
 
   const rows = [
-    { label: "Total Fat",      value: `${baseF}g` },
-    { label: "Saturated Fat",  value: `${baseSF}g`, indent: true },
-    { label: "Trans Fat",      value: `${baseTF}g`, indent: true },
-    { label: "Cholesterol",    value: `${baseChol}mg` },
-    { label: "Sodium",         value: `${baseNa}mg` },
-    { label: "Total Carbs",    value: `${baseC}g` },
-    { label: "Dietary Fiber",  value: `${baseFib}g`, indent: true },
-    { label: "Total Sugars",   value: `${baseSug}g`, indent: true },
-    { label: "Protein",        value: `${baseP}g` },
+    { label: "Total Fat", value: `${baseF}g` },
+    { label: "Saturated Fat", value: `${baseSF}g`, indent: true },
+    { label: "Trans Fat", value: `${baseTF}g`, indent: true },
+    { label: "Cholesterol", value: `${baseChol}mg` },
+    { label: "Sodium", value: `${baseNa}mg` },
+    { label: "Total Carbs", value: `${baseC}g` },
+    { label: "Dietary Fiber", value: `${baseFib}g`, indent: true },
+    { label: "Total Sugars", value: `${baseSug}g`, indent: true },
+    { label: "Protein", value: `${baseP}g` },
   ];
 
   return (
@@ -631,9 +633,9 @@ function FoodSearchModal({ visible, meal, onClose, recentFoods, onFoodAdded }) {
   const [error, setError] = useState(null);
   const [selectedFood, setSelectedFood] = useState(null);
   const searchTimer = useRef(null);
-  const translateY  = useRef(new Animated.Value(SCREEN_H)).current;
+  const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const detailSlide = useRef(new Animated.Value(SCREEN_W)).current;
-  const posRef      = useRef(SNAP_PARTIAL);
+  const posRef = useRef(SNAP_PARTIAL);
 
   useEffect(() => {
     const q = query.trim();
@@ -706,9 +708,9 @@ function FoodSearchModal({ visible, meal, onClose, recentFoods, onFoodAdded }) {
 
   function handleSave(food, qty) {
     const cal = Math.round((food.calories ?? 0) * qty);
-    const p   = Math.round((food.protein  ?? 0) * qty);
-    const c   = Math.round((food.total_carbohydrate ?? 0) * qty);
-    const f   = Math.round((food.total_fat ?? 0) * qty);
+    const p = Math.round((food.protein ?? 0) * qty);
+    const c = Math.round((food.total_carbohydrate ?? 0) * qty);
+    const f = Math.round((food.total_fat ?? 0) * qty);
     onFoodAdded({ ...food, cal, p, c, f, qty }, meal.mealId);
     close();
   }
@@ -896,18 +898,18 @@ function FoodSearchModal({ visible, meal, onClose, recentFoods, onFoodAdded }) {
 
 // ── Nutrition direction: 'more' = hitting goal is good, 'less' = staying under is good, 'range' = both matter
 const NUTRIENT_DIR = {
-  calories: 'range', fat: 'range',  carbs: 'range',
-  sat_fat: 'less',   trans_fat: 'less', cholesterol: 'less', sodium: 'less', sugar: 'less',
-  fiber: 'more',     protein: 'more',   vit_d: 'more', calcium: 'more', iron: 'more', potassium: 'more',
+  calories: 'range', fat: 'range', carbs: 'range',
+  sat_fat: 'less', trans_fat: 'less', cholesterol: 'less', sodium: 'less', sugar: 'less',
+  fiber: 'more', protein: 'more', vit_d: 'more', calcium: 'more', iron: 'more', potassium: 'more',
 };
 const GOAL_KEY = {
-  calories: 'goal_calories',      fat: 'goal_total_fat',
-  sat_fat: 'goal_saturated_fat',  trans_fat: 'goal_trans_fat',
+  calories: 'goal_calories', fat: 'goal_total_fat',
+  sat_fat: 'goal_saturated_fat', trans_fat: 'goal_trans_fat',
   cholesterol: 'goal_cholesterol', sodium: 'goal_sodium',
   carbs: 'goal_total_carbohydrate', fiber: 'goal_dietary_fiber',
-  sugar: 'goal_total_sugars',     protein: 'goal_protein',
-  vit_d: 'goal_vitamin_d',        calcium: 'goal_calcium',
-  iron: 'goal_iron',              potassium: 'goal_potassium',
+  sugar: 'goal_total_sugars', protein: 'goal_protein',
+  vit_d: 'goal_vitamin_d', calcium: 'goal_calcium',
+  iron: 'goal_iron', potassium: 'goal_potassium',
 };
 
 function nColor(key, value, goals) {
@@ -915,15 +917,15 @@ function nColor(key, value, goals) {
   const g = goals[GOAL_KEY[key]];
   if (!g) return C.text;
   const r = value / g;
-  if (NUTRIENT_DIR[key] === 'more')  return r >= 0.8 && r <= 1.2  ? C.green : C.text;
-  if (NUTRIENT_DIR[key] === 'less')  return r >= 0.6 && r <= 1.05 ? C.green : C.text;
-  return r >= 0.8 && r <= 1.15      ? C.green : C.text;
+  if (NUTRIENT_DIR[key] === 'more') return r >= 0.8 && r <= 1.2 ? C.green : C.text;
+  if (NUTRIENT_DIR[key] === 'less') return r >= 0.6 && r <= 1.05 ? C.green : C.text;
+  return r >= 0.8 && r <= 1.15 ? C.green : C.text;
 }
 
 function fmtVal(key, value, unit, goals, mode) {
   const g = goals?.[GOAL_KEY[key]];
   if (mode === 'amount' || !g) return `${value}${unit}`;
-  if (mode === 'vs_goal')      return `${value}${unit} / ${Math.round(g)}${unit}`;
+  if (mode === 'vs_goal') return `${value}${unit} / ${Math.round(g)}${unit}`;
   return `${Math.round((value / g) * 100)}%`;
 }
 
@@ -932,27 +934,27 @@ function NutritionBreakdownModal({ visible, totals, goals, calorieGoal, dateLabe
 
   if (!visible || !totals) return null;
 
-  const cal      = totals.calories ?? 0;
+  const cal = totals.calories ?? 0;
   const progress = Math.min(Math.max(cal / calorieGoal, 0), 1);
-  const isOver   = cal > calorieGoal;
+  const isOver = cal > calorieGoal;
 
   const macroRows = [
-    { key: 'fat',         label: 'Total Fat',      value: totals.fat,         unit: 'g'  },
-    { key: 'sat_fat',     label: 'Saturated Fat',  value: totals.sat_fat,     unit: 'g',  indent: true },
-    { key: 'trans_fat',   label: 'Trans Fat',      value: totals.trans_fat,   unit: 'g',  indent: true },
-    { key: 'cholesterol', label: 'Cholesterol',    value: totals.cholesterol, unit: 'mg' },
-    { key: 'sodium',      label: 'Sodium',         value: totals.sodium,      unit: 'mg' },
-    { key: 'carbs',       label: 'Total Carbs',    value: totals.carbs,       unit: 'g'  },
-    { key: 'fiber',       label: 'Dietary Fiber',  value: totals.fiber,       unit: 'g',  indent: true },
-    { key: 'sugar',       label: 'Total Sugars',   value: totals.sugar,       unit: 'g',  indent: true },
-    { key: 'protein',     label: 'Protein',        value: totals.protein,     unit: 'g'  },
+    { key: 'fat', label: 'Total Fat', value: totals.fat, unit: 'g' },
+    { key: 'sat_fat', label: 'Saturated Fat', value: totals.sat_fat, unit: 'g', indent: true },
+    { key: 'trans_fat', label: 'Trans Fat', value: totals.trans_fat, unit: 'g', indent: true },
+    { key: 'cholesterol', label: 'Cholesterol', value: totals.cholesterol, unit: 'mg' },
+    { key: 'sodium', label: 'Sodium', value: totals.sodium, unit: 'mg' },
+    { key: 'carbs', label: 'Total Carbs', value: totals.carbs, unit: 'g' },
+    { key: 'fiber', label: 'Dietary Fiber', value: totals.fiber, unit: 'g', indent: true },
+    { key: 'sugar', label: 'Total Sugars', value: totals.sugar, unit: 'g', indent: true },
+    { key: 'protein', label: 'Protein', value: totals.protein, unit: 'g' },
   ];
 
   const microRows = [
-    { key: 'vit_d',     label: 'Vitamin D',  value: totals.vit_d,      unit: 'mcg' },
-    { key: 'calcium',   label: 'Calcium',    value: totals.calcium,    unit: 'mg'  },
-    { key: 'iron',      label: 'Iron',       value: totals.iron,       unit: 'mg'  },
-    { key: 'potassium', label: 'Potassium',  value: totals.potassium,  unit: 'mg'  },
+    { key: 'vit_d', label: 'Vitamin D', value: totals.vit_d, unit: 'mcg' },
+    { key: 'calcium', label: 'Calcium', value: totals.calcium, unit: 'mg' },
+    { key: 'iron', label: 'Iron', value: totals.iron, unit: 'mg' },
+    { key: 'potassium', label: 'Potassium', value: totals.potassium, unit: 'mg' },
   ];
 
   // calorie display adapts to mode
@@ -984,9 +986,9 @@ function NutritionBreakdownModal({ visible, totals, goals, calorieGoal, dateLabe
           {goals && (
             <View style={s.nbModeRow}>
               {[
-                { k: 'amount',  l: 'Amount'    },
-                { k: 'vs_goal', l: 'Targets'   },
-                { k: 'pct',     l: '% of Goal' },
+                { k: 'amount', l: 'Amount' },
+                { k: 'vs_goal', l: 'Targets' },
+                { k: 'pct', l: '% of Goal' },
               ].map(m => (
                 <Pressable
                   key={m.k}
@@ -1089,10 +1091,10 @@ function CalendarModal({ visible, selected, onSelect, onClose }) {
   const [view, setView] = useState(() => new Date(selected));
   const today = new Date();
 
-  const year  = view.getFullYear();
+  const year = view.getFullYear();
   const month = view.getMonth();
 
-  const firstDow    = new Date(year, month, 1).getDay();
+  const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const cells = [
@@ -1142,8 +1144,8 @@ function CalendarModal({ visible, selected, onSelect, onClose }) {
               </View>
             ))}
             {cells.map((day, i) => {
-              const sel   = isSelected(day);
-              const tod   = isTodayCell(day);
+              const sel = isSelected(day);
+              const tod = isTodayCell(day);
               return (
                 <Pressable
                   key={i}

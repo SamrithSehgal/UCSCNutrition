@@ -29,9 +29,9 @@ const CAFE_TYPE = {
 
 const JOURNAL_MEALS = [
   { label: "Breakfast", num: 1, color: C.mBreakfast },
-  { label: "Lunch",     num: 2, color: C.mLunch     },
-  { label: "Dinner",    num: 3, color: C.mDinner     },
-  { label: "Snacks",    num: 4, color: C.mSnacks     },
+  { label: "Lunch", num: 2, color: C.mLunch },
+  { label: "Dinner", num: 3, color: C.mDinner },
+  { label: "Snacks", num: 4, color: C.mSnacks },
 ];
 
 function getLocationType(name) {

@@ -14,8 +14,6 @@ import { DrawerCtx } from "../drawerContext";
 import { MenuCtx } from "../menuContext";
 import { C } from "../styles/dashboard.styles";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import auth from "@react-native-firebase/auth";
 import { get } from "../api";
 
 const DRAWER_W = 256;
@@ -26,15 +24,19 @@ const TABS = [
   { label: "Analytics", href: "/analytics", icon: "stats-chart", iconOut: "stats-chart-outline" },
 ];
 
+const FOOTER_TABS = [
+  { label: "Settings",  href: "/settings",  icon: "settings",    iconOut: "settings-outline"    },
+];
+
 export default function AppLayout() {
   const { user, loading } = useAuthState();
   const pathname = usePathname();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const translateX = useRef(new Animated.Value(-DRAWER_W)).current;
-  const opacity    = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
 
-  const [menu, setMenu]           = useState(null);
+  const [menu, setMenu] = useState(null);
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState(null);
 
@@ -42,27 +44,20 @@ export default function AppLayout() {
     setDrawerOpen(true);
     Animated.parallel([
       Animated.spring(translateX, { toValue: 0, useNativeDriver: true, damping: 24, stiffness: 260 }),
-      Animated.timing(opacity,    { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
     ]).start();
   }
 
   function closeDrawer(cb) {
     Animated.parallel([
       Animated.timing(translateX, { toValue: -DRAWER_W, duration: 200, useNativeDriver: true }),
-      Animated.timing(opacity,    { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start(() => { setDrawerOpen(false); cb?.(); });
   }
 
   function navigate(href) {
     if (pathname === href) { closeDrawer(); return; }
     closeDrawer(() => router.replace(href));
-  }
-
-  async function handleSignOut() {
-    closeDrawer(async () => {
-      try { await GoogleSignin.signOut(); } catch (_) {}
-      await auth().signOut();
-    });
   }
 
   async function fetchMenu(dateStr) {
@@ -82,7 +77,7 @@ export default function AppLayout() {
   }
 
   if (loading) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
-  if (!user)   return <Redirect href="/" />;
+  if (!user) return <Redirect href="/" />;
 
   return (
     <MenuCtx.Provider value={{ menu, loading: menuLoading, error: menuError, fetchMenu }}>
@@ -140,13 +135,33 @@ export default function AppLayout() {
               <View style={{ flex: 1 }} />
               <View style={ds.divider} />
 
-              <Pressable
-                style={({ pressed }) => [ds.signOutRow, pressed && { opacity: 0.45 }]}
-                onPress={handleSignOut}
-              >
-                <Ionicons name="log-out-outline" size={17} color={C.faint} style={ds.navIcon} />
-                <Text style={ds.signOutLabel}>Sign Out</Text>
-              </Pressable>
+              <View style={ds.navSection}>
+                {FOOTER_TABS.map((tab) => {
+                  const active = pathname === tab.href;
+                  return (
+                    <Pressable
+                      key={tab.href}
+                      style={({ pressed }) => [
+                        ds.navItem,
+                        active && ds.navItemActive,
+                        pressed && !active && ds.navItemPressed,
+                      ]}
+                      onPress={() => navigate(tab.href)}
+                    >
+                      {active && <View style={ds.activeAccent} />}
+                      <Ionicons
+                        name={active ? tab.icon : tab.iconOut}
+                        size={19}
+                        color={active ? C.blue : C.soft}
+                        style={ds.navIcon}
+                      />
+                      <Text style={[ds.navLabel, active && ds.navLabelActive]}>
+                        {tab.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           </Animated.View>
         </View>
@@ -173,8 +188,8 @@ const ds = StyleSheet.create({
   },
   brandArea: { paddingHorizontal: 22, paddingBottom: 22 },
   brandName: { fontSize: 17, fontWeight: "700", color: C.text, letterSpacing: -0.3 },
-  brandSub:  { fontSize: 12, color: C.soft, marginTop: 3, fontWeight: "400" },
-  divider:   { height: 1, backgroundColor: C.border },
+  brandSub: { fontSize: 12, color: C.soft, marginTop: 3, fontWeight: "400" },
+  divider: { height: 1, backgroundColor: C.border },
   navSection: { paddingTop: 10, paddingBottom: 6, paddingHorizontal: 10 },
   navItem: {
     flexDirection: "row",
@@ -186,7 +201,7 @@ const ds = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  navItemActive:  { backgroundColor: "rgba(80,128,188,0.11)" },
+  navItemActive: { backgroundColor: "rgba(80,128,188,0.11)" },
   navItemPressed: { backgroundColor: C.raised },
   activeAccent: {
     position: "absolute",
@@ -194,7 +209,7 @@ const ds = StyleSheet.create({
     width: 3, borderRadius: 2,
     backgroundColor: C.blue,
   },
-  navIcon:  { width: 24, marginRight: 11, textAlign: "center" },
+  navIcon: { width: 24, marginRight: 11, textAlign: "center" },
   navLabel: { fontSize: 15, fontWeight: "500", color: C.soft },
   navLabelActive: { color: C.blue, fontWeight: "600" },
   signOutRow: {
